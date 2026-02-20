@@ -1,0 +1,228 @@
+import React from 'react';
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../../auth';
+import { useDashboardData } from '../hooks/useDashboardData';
+import { errorService, ErrorType } from '../../../shared/services/errorService';
+import { Layout } from '../../../shared/components/Layout';
+import { Button } from '../../../shared/components/Button';
+import { UtensilsCrossed, Toilet, Heart, History, Download, User } from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { dashboardService } from '../services/dashboardService';
+
+export function DashboardPage() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const { getTodayStats, loading, exportData } = useDashboardData();
+  const stats = getTodayStats();
+  const [exporting, setExporting] = useState(false);
+
+  const todayTip = dashboardService.getTodayTip();
+
+  const handleExport = async () => {
+    if (!user?.profile) {
+      alert('Profil utilisateur non disponible');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      await exportData();
+      alert('Données exportées avec succès');
+    } catch (error) {
+      errorService.handleError(
+        ErrorType.DATA_EXPORT_FAILED,
+        error as Error,
+        { context: 'Dashboard_export' }
+      );
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#303d25]"></div>
+        </div>
+      </Layout>
+    );
+  }
+
+  return (
+    <Layout>
+      <div className="space-y-6">
+        {/* Header avec nom et bouton profil */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-[#e3c79f]/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-[#303d25] rounded-full flex items-center justify-center">
+                <User className="text-white" size={24} />
+              </div>
+              <div>
+                <h1 className="text-xl font-bold text-[#303d25]">
+                  {user?.profile?.name || 'Mon Tableau de Bord'}
+                </h1>
+                <p className="text-sm text-[#303d25]/70">
+                  Suivi Santé - {format(new Date(), 'dd MMMM yyyy', { locale: fr })}
+                </p>
+              </div>
+            </div>
+            <Button
+              onClick={() => navigate('/profile')}
+              variant="outline"
+              size="sm"
+              icon={<User size={16} />}
+            >
+              Profil
+            </Button>
+          </div>
+        </div>
+
+        {/* Daily Stats */}
+        <div className="bg-[#e3c79f]/40 backdrop-blur-sm rounded-xl p-5 shadow-lg border border-[#e3c79f]/30">
+          <h2 className="text-lg font-semibold text-[#303d25] mb-3 uppercase tracking-wide">
+            Récapitulatif du jour
+          </h2>
+          <div className="space-y-1">
+            <button
+              onClick={() => navigate('/history?tab=consumptions&filter=today')}
+              className="w-full flex justify-between items-center p-2 rounded-lg hover:bg-white/30 transition-colors group"
+            >
+              <div className="flex items-center gap-2">
+                <UtensilsCrossed size={16} className="text-[#303d25]" />
+                <span className="text-[#303d25]">Consommations</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#303d25]">{stats.consumptionsCount}</span>
+                <span className="text-[#303d25]/50 group-hover:text-[#303d25] transition-colors">→</span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => navigate('/history?tab=symptoms&filter=today')}
+              className="w-full flex justify-between items-center p-2 rounded-lg hover:bg-white/30 transition-colors group"
+            >
+              <div className="flex items-center gap-2">
+                <Heart size={16} className="text-[#303d25]" />
+                <span className="text-[#303d25]">Ressenti</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#303d25]">{stats.symptomsCount}</span>
+                <span className="text-[#303d25]/50 group-hover:text-[#303d25] transition-colors">→</span>
+              </div>
+            </button>
+            
+            <button
+              onClick={() => navigate('/history?tab=stools&filter=today')}
+              className="w-full flex justify-between items-center p-2 rounded-lg hover:bg-white/30 transition-colors group"
+            >
+              <div className="flex items-center gap-2">
+                <Toilet size={16} className="text-[#303d25]" />
+                <span className="text-[#303d25]">Selles</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#303d25]">{stats.stoolsCount}</span>
+                <span className="text-[#303d25]/50 group-hover:text-[#303d25] transition-colors">→</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <button
+            onClick={() => navigate('/meal')}
+            className="bg-white/90 backdrop-blur-sm hover:bg-[#b4b08a] rounded-xl p-4 flex flex-col items-center gap-3 transition-colors shadow-lg border border-[#e3c79f]/30"
+          >
+            <div className="w-12 h-12 bg-[#303d25] rounded-lg flex items-center justify-center">
+              <UtensilsCrossed className="text-white" size={24} />
+            </div>
+            <span className="text-sm font-medium text-[#303d25] text-center">
+              Consommations
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate('/stool')}
+            className="bg-white/90 backdrop-blur-sm hover:bg-[#b4b08a] rounded-xl p-4 flex flex-col items-center gap-3 transition-colors shadow-lg border border-[#e3c79f]/30"
+          >
+            <div className="w-12 h-12 bg-[#303d25] rounded-lg flex items-center justify-center">
+              <Toilet className="text-white" size={24} />
+            </div>
+            <span className="text-sm font-medium text-[#303d25] text-center">
+              Selles
+            </span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-4">
+          <button
+            onClick={() => navigate('/symptom')}
+            className="bg-white/90 backdrop-blur-sm hover:bg-[#b4b08a] rounded-xl p-4 flex flex-col items-center gap-3 transition-colors shadow-lg border border-[#e3c79f]/30"
+          >
+            <div className="w-12 h-12 bg-[#303d25] rounded-lg flex items-center justify-center">
+              <Heart className="text-white" size={24} />
+            </div>
+            <span className="text-sm font-medium text-[#303d25] text-center">
+              Ressenti
+            </span>
+          </button>
+
+          <button
+            onClick={() => navigate('/history')}
+            className="bg-white/90 backdrop-blur-sm hover:bg-[#b4b08a] rounded-xl p-4 flex flex-col items-center gap-3 transition-colors shadow-lg border border-[#e3c79f]/30"
+          >
+            <div className="w-12 h-12 bg-[#303d25] rounded-lg flex items-center justify-center">
+              <History className="text-white" size={24} />
+            </div>
+            <span className="text-sm font-medium text-[#303d25] text-center">
+              Historique
+            </span>
+          </button>
+        </div>
+
+        {/* Export Button */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-[#e3c79f]/30">
+          <Button
+            onClick={handleExport}
+            disabled={exporting}
+            fullWidth
+            variant="secondary"
+            icon={<Download size={20} />}
+          >
+            {exporting ? 'Export en cours...' : 'Exporter pour le praticien'}
+          </Button>
+          <p className="text-xs text-[#303d25]/70 mt-2 text-center">
+            Génère un fichier Excel avec toutes vos données de suivi
+          </p>
+        </div>
+
+        {/* Daily Tip */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl p-6 shadow-lg border border-[#e3c79f]/30">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-lg font-semibold text-[#303d25] uppercase tracking-wide">
+              Conseil du jour
+            </h2>
+          </div>
+          <p className="text-[#303d25] leading-relaxed">
+            {todayTip}
+          </p>
+          
+          {user?.profile?.diagnosis === 'colite-ulcereuse' && user?.profile?.rectocolite_signature && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="text-sm font-semibold text-blue-800 mb-1">
+                Votre signature : {dashboardService.getDiagnosisLabel(user.profile.rectocolite_signature)}
+              </h3>
+              <p className="text-xs text-blue-700">
+                N'hésitez pas à discuter avec votre médecin de l'évolution de votre maladie 
+                et de l'adaptation de votre traitement selon votre signature.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </Layout>
+  );
+}
