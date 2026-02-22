@@ -1,6 +1,9 @@
+import type { UserIdentity } from '@supabase/supabase-js';
+
 // === TYPES UTILISATEUR UNIFIÉS ===
 
 // Profil utilisateur de base (correspond aux données Supabase)
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -40,7 +43,7 @@ export interface AuthUser {
   role?: string;
   app_metadata?: Record<string, unknown>;
   user_metadata?: Record<string, unknown>;
-  identities?: Array<Record<string, unknown>>;
+  identities?: UserIdentity[];
   [key: string]: unknown; // Pour flexibilité avec Supabase
 }
 

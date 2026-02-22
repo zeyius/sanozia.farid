@@ -244,7 +244,7 @@ export function HistoryPage() {
             consistency: deletedItem.item.consistency,
             blood_level: deletedItem.item.blood_level,
             mucus_level: deletedItem.item.mucus_level,
-            urgency: stoolService.urgenceFromNumber((deletedItem.item as any).urgence),
+            urgence: (deletedItem.item as any).urgence,
             duration_minutes: (deletedItem.item as any).duration_minutes,
             evacuation_effort: (deletedItem.item as any).evacuation_effort,
             pain_level: (deletedItem.item as any).pain_level,

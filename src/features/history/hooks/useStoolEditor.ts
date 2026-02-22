@@ -55,8 +55,8 @@ export function useStoolEditor(
     
     setEditFormData({
       consistency: typeof stool.consistency === 'string' ? parseInt(stool.consistency, 10) : stool.consistency || 4,
-      blood_level: (stool as any).blood_level || (stool.has_blood ? 'trace' : 'none'),
-      mucus_level: (stool as any).mucus_level || (stool.has_mucus ? 'trace' : 'none'),
+      blood_level: (stool as any).blood_level || ((stool as any).has_blood ? 'trace' : 'none'),
+      mucus_level: (stool as any).mucus_level || ((stool as any).has_mucus ? 'trace' : 'none'),
       urgency: stoolService.urgenceFromNumber(stool.urgence),
       stool_date: stool.stool_date || format(new Date(), 'yyyy-MM-dd'),
       stool_time: formatTime(stool.stool_time),

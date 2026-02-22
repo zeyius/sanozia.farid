@@ -17,7 +17,7 @@ export function OnboardingPage() {
     console.log('OnboardingPage: Hook useOnboarding fonctionne', { loading: hookData.loading, currentStep: hookData.currentStep });
   } catch (error) {
     console.error('OnboardingPage: Erreur avec useOnboarding:', error);
-    return <div>Erreur: {error.message}</div>;
+    return <div>Erreur: {(error as Error).message}</div>;
   }
   
   const {

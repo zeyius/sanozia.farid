@@ -109,6 +109,7 @@ export function SymptomSelector({ isOpen, onClose, onSelectSymptom, existingSymp
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#b36b43]"></div>
             </div>
           ) : (
+
             <div className="space-y-3">
               {/* Enabled symptoms */}
               {enabledSymptoms.length > 0 && (
@@ -116,7 +117,7 @@ export function SymptomSelector({ isOpen, onClose, onSelectSymptom, existingSymp
                   <h3 className="text-sm font-medium text-[#303d25] mb-3">Symptômes disponibles</h3>
                   {enabledSymptoms.map((symptom) => (
                     <button
-                       key={symptom.id}
+                       key={symptom.key}
                        onClick={() => handleSelectSymptom(symptom.label)}
                        disabled={existingSymptoms.includes(symptom.label)}
                        className={`w-full p-3 rounded-lg border transition-all duration-200 ${
@@ -150,7 +151,7 @@ export function SymptomSelector({ isOpen, onClose, onSelectSymptom, existingSymp
                   <h3 className="text-sm font-medium text-[#303d25]/60 mb-3">Symptômes désactivés</h3>
                   {disabledSymptoms.map((symptom) => (
                     <button
-                       key={symptom.id}
+                       key={symptom.key}
                        onClick={() => handleSelectSymptom(symptom.label)}
                        disabled={existingSymptoms.includes(symptom.label)}
                        className={`w-full p-3 rounded-lg border transition-all duration-200 ${

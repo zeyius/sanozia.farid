@@ -171,7 +171,6 @@ export function StoolHistoryTab({
                         editFormData.urgency === level.value
                           ? (
                               level.value === 'none' ? 'bg-gray-100 text-gray-700 border-gray-300' :
-                              level.value === 'low' ? 'bg-yellow-100 text-yellow-800 border-yellow-300' :
                               level.value === 'moderate' ? 'bg-orange-100 text-orange-800 border-orange-300' :
                               level.value === 'severe' ? 'bg-red-100 text-red-800 border-red-300' :
                               'bg-[#303d25] text-white border-[#303d25]'

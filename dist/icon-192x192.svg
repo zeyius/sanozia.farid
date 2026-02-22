@@ -1,0 +1,7 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="24" fill="#303d25"/>
+  <path d="M96 48C96 48 120 60 120 84C120 108 96 120 96 120C96 120 72 108 72 84C72 60 96 48 96 48Z" fill="#e3c79f"/>
+  <path d="M96 72C96 72 108 78 108 90C108 102 96 108 96 108C96 108 84 102 84 90C84 78 96 72 96 72Z" fill="#f6e6d6"/>
+  <circle cx="96" cy="144" r="12" fill="#e3c79f"/>
+  <text x="96" y="170" text-anchor="middle" fill="#e3c79f" font-family="Arial, sans-serif" font-size="12" font-weight="bold">IBD</text>
+</svg>
