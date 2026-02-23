@@ -1,5 +1,3 @@
-import React from 'react';
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../auth';
 import { useDashboardData } from '../hooks/useDashboardData';
@@ -10,6 +8,16 @@ import { UtensilsCrossed, Toilet, Heart, History, Download, User } from 'lucide-
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { dashboardService } from '../services/dashboardService';
+import { supabase } from '../../../lib/supabase';
+import { useEffect, useState } from 'react';
+
+type AiTip = {
+  insight?: string;
+  action?: string;
+  question?: string;
+  warnings?: string[];
+  confidence?: number;
+};
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -19,6 +27,95 @@ export function DashboardPage() {
   const [exporting, setExporting] = useState(false);
 
   const todayTip = dashboardService.getTodayTip();
+
+  const [aiTip, setAiTip] = useState<AiTip | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        setAiLoading(true);
+
+        // 1) Get access token
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+        if (accessToken) {
+          try {
+            const payload = JSON.parse(atob(accessToken.split('.')[1]));
+            console.log("JWT payload:", payload);
+            console.log("JWT ref:", payload?.ref);
+            console.log("JWT iss:", payload?.iss);
+          } catch (e) {
+            console.error("Failed to decode JWT:", e);
+          }
+        }
+        
+        console.log('sessionError:', sessionError);
+        console.log('accessToken present:', !!accessToken);
+
+        if (!accessToken) {
+          setAiTip(null);
+          return;
+        }
+
+        // 2) Call edge function via fetch (explicit headers)
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+        if (!supabaseUrl || !anonKey) {
+          console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in env');
+          setAiTip(null);
+          return;
+        }
+
+        const res = await fetch(`${supabaseUrl}/functions/v1/analyze-week`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            apikey: anonKey,
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({ range: 'last_7_days' }),
+        });
+
+        const text = await res.text();
+        let payload: any = null;
+        try {
+          payload = text ? JSON.parse(text) : null;
+        } catch {
+          payload = { raw: text };
+        }
+
+        if (cancelled) return;
+
+        console.log('analyze-week status:', res.status);
+        console.log('analyze-week payload:', payload);
+
+        if (!res.ok) {
+          // Keep fallback tip, but show error in console
+          setAiTip(null);
+          return;
+        }
+
+        setAiTip(payload ?? null);
+      } catch (e) {
+        if (!cancelled) {
+          console.error('analyze-week exception:', e);
+          setAiTip(null);
+        }
+      } finally {
+        if (!cancelled) setAiLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const handleExport = async () => {
     if (!user?.profile) {
@@ -54,7 +151,7 @@ export function DashboardPage() {
   return (
     <Layout>
       <div className="space-y-6">
-        {/* Header avec nom et bouton profil */}
+        {/* Header */}
         <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-[#e3c79f]/30">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -100,7 +197,7 @@ export function DashboardPage() {
                 <span className="text-[#303d25]/50 group-hover:text-[#303d25] transition-colors">→</span>
               </div>
             </button>
-            
+
             <button
               onClick={() => navigate('/history?tab=symptoms&filter=today')}
               className="w-full flex justify-between items-center p-2 rounded-lg hover:bg-white/30 transition-colors group"
@@ -114,7 +211,7 @@ export function DashboardPage() {
                 <span className="text-[#303d25]/50 group-hover:text-[#303d25] transition-colors">→</span>
               </div>
             </button>
-            
+
             <button
               onClick={() => navigate('/history?tab=stools&filter=today')}
               className="w-full flex justify-between items-center p-2 rounded-lg hover:bg-white/30 transition-colors group"
@@ -206,17 +303,26 @@ export function DashboardPage() {
               Conseil du jour
             </h2>
           </div>
-          <p className="text-[#303d25] leading-relaxed">
-            {todayTip}
-          </p>
-          
+
+          {aiLoading ? (
+            <p className="text-[#303d25]/70 leading-relaxed">Analyse en cours...</p>
+          ) : aiTip?.insight || aiTip?.action ? (
+            <div className="space-y-2 text-[#303d25] leading-relaxed">
+              {aiTip.insight && <p><span className="font-semibold">Insight:</span> {aiTip.insight}</p>}
+              {aiTip.action && <p><span className="font-semibold">Action:</span> {aiTip.action}</p>}
+              {aiTip.question && <p><span className="font-semibold">Question:</span> {aiTip.question}</p>}
+            </div>
+          ) : (
+            <p className="text-[#303d25] leading-relaxed">{todayTip}</p>
+          )}
+
           {user?.profile?.diagnosis === 'colite-ulcereuse' && user?.profile?.rectocolite_signature && (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <h3 className="text-sm font-semibold text-blue-800 mb-1">
                 Votre signature : {dashboardService.getDiagnosisLabel(user.profile.rectocolite_signature)}
               </h3>
               <p className="text-xs text-blue-700">
-                N'hésitez pas à discuter avec votre médecin de l'évolution de votre maladie 
+                N'hésitez pas à discuter avec votre médecin de l'évolution de votre maladie
                 et de l'adaptation de votre traitement selon votre signature.
               </p>
             </div>
