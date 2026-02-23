@@ -109,7 +109,55 @@ export type Database = {
           }
         ]
       }
-
+  
+      consumptions: {
+        Row: {
+          id: string
+          profile_id: string
+          consumption_time: string
+          consumption_date: string
+          consumption_type: string | null
+          consumption: string | null
+          prep_mode: string | null
+          after_effects: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          profile_id: string
+          consumption_time: string
+          consumption_date: string
+          consumption_type?: string | null
+          consumption?: string | null
+          prep_mode?: string | null
+          after_effects?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          profile_id?: string
+          consumption_time?: string
+          consumption_date?: string
+          consumption_type?: string | null
+          consumption?: string | null
+          prep_mode?: string | null
+          after_effects?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "consumptions_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      
       meals: {
         Row: {
           cooking_method: string

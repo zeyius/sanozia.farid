@@ -32,90 +32,150 @@ export function DashboardPage() {
   const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
-    if (!user?.id) return;
+  if (!user?.id) return;
 
-    let cancelled = false;
+  let cancelled = false;
 
-    (async () => {
-      try {
-        setAiLoading(true);
+  (async () => {
+    try {
+      setAiLoading(true);
 
-        // 1) Get access token
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
-        if (accessToken) {
-          try {
-            const payload = JSON.parse(atob(accessToken.split('.')[1]));
-            console.log("JWT payload:", payload);
-            console.log("JWT ref:", payload?.ref);
-            console.log("JWT iss:", payload?.iss);
-          } catch (e) {
-            console.error("Failed to decode JWT:", e);
-          }
-        }
-        
-        console.log('sessionError:', sessionError);
-        console.log('accessToken present:', !!accessToken);
-
-        if (!accessToken) {
-          setAiTip(null);
-          return;
-        }
-
-        // 2) Call edge function via fetch (explicit headers)
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
-
-        if (!supabaseUrl || !anonKey) {
-          console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in env');
-          setAiTip(null);
-          return;
-        }
-
-        const res = await fetch(`${supabaseUrl}/functions/v1/analyze-week`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            apikey: anonKey,
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({ range: 'last_7_days' }),
-        });
-
-        const text = await res.text();
-        let payload: any = null;
-        try {
-          payload = text ? JSON.parse(text) : null;
-        } catch {
-          payload = { raw: text };
-        }
-
-        if (cancelled) return;
-
-        console.log('analyze-week status:', res.status);
-        console.log('analyze-week payload:', payload);
-
-        if (!res.ok) {
-          // Keep fallback tip, but show error in console
-          setAiTip(null);
-          return;
-        }
-
-        setAiTip(payload ?? null);
-      } catch (e) {
-        if (!cancelled) {
-          console.error('analyze-week exception:', e);
-          setAiTip(null);
-        }
-      } finally {
-        if (!cancelled) setAiLoading(false);
+      // 0) Guard: supabase client must exist
+      if (!supabase) {
+        setAiTip(null);
+        return;
       }
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.id]);
+      // 1) Get access token
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      console.log('sessionError:', sessionError);
+      console.log('accessToken present:', !!accessToken);
+
+      if (!accessToken) {
+        setAiTip(null);
+        return;
+      }
+
+      // 2) Calculate date range
+      const today = new Date();
+      const sevenDaysAgo = new Date(today);
+      sevenDaysAgo.setDate(today.getDate() - 7);
+      const fromDate = sevenDaysAgo.toISOString().split('T')[0];
+
+      // 3) Get the user's profile_id first
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, diagnosis, rectocolite_signature')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) {
+        console.error('No profile found for user');
+        setAiTip(null);
+        return;
+      }
+
+      // 4) Fetch the last 7 days of real data in parallel
+      const [
+        { data: consumptions },
+        { data: stools },
+        { data: feelings },
+        { data: treatments },
+      ] = await Promise.all([
+        supabase
+          .from('consumptions')
+          .select('consumption_date, consumption_time, consumption_type, consumption, prep_mode, after_effects')
+          .eq('profile_id', profile.id)
+          .gte('consumption_date', fromDate),
+
+        supabase
+          .from('stools')
+          .select('stool_date, stool_time, consistency, blood_level, mucus_level, pain_level, urgence, notes')
+          .eq('profile_id', profile.id)
+          .gte('stool_date', fromDate),
+
+        supabase
+          .from('feeling_captures')
+          .select('capture_date, capture_time, global_feeling, notes, captured_symptoms(symptom_name, symptom_intensity)')
+          .eq('profile_id', profile.id)
+          .gte('capture_date', fromDate),
+
+        supabase
+          .from('treatments')
+          .select('name, dosage, frequency, is_active')
+          .eq('profile_id', profile.id)
+          .eq('is_active', true),
+      ]);
+
+      // 5) Build the snapshot
+      const snapshot = {
+        range: 'last_7_days',
+        from: fromDate,
+        to: today.toISOString().split('T')[0],
+        profile: {
+          diagnosis: profile.diagnosis,
+          rectocolite_signature: profile.rectocolite_signature,
+        },
+        consumptions: consumptions ?? [],
+        stools: stools ?? [],
+        feelings: feelings ?? [],
+        active_treatments: treatments ?? [],
+      };
+
+      // 6) Call edge function via fetch (explicit headers)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+      if (!supabaseUrl || !anonKey) {
+        console.error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY in env');
+        setAiTip(null);
+        return;
+      }
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/analyze-week`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: anonKey,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify(snapshot),
+      });
+
+      const text = await res.text();
+      let payload: any = null;
+      try {
+        payload = text ? JSON.parse(text) : null;
+      } catch {
+        payload = { raw: text };
+      }
+
+      if (cancelled) return;
+
+      console.log('analyze-week status:', res.status);
+      console.log('analyze-week payload:', payload);
+
+      if (!res.ok) {
+        setAiTip(null);
+        return;
+      }
+
+      setAiTip(payload ?? null);
+    } catch (e) {
+      if (!cancelled) {
+        console.error('analyze-week exception:', e);
+        setAiTip(null);
+      }
+    } finally {
+      if (!cancelled) setAiLoading(false);
+    }
+  })();
+
+  return () => {
+    cancelled = true;
+  };
+}, [user?.id]);
 
   const handleExport = async () => {
     if (!user?.profile) {

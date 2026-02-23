@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
 
   try {
     const LLM_API_KEY = Deno.env.get("LLM_API_KEY");
-    const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "google/gemma-3-4b-it:free";
+    const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "deepseek/deepseek-r1-0528:free";
 
     if (!LLM_API_KEY) {
       return new Response(JSON.stringify({ error: "Missing LLM_API_KEY" }), {
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     }
 
     const prompt = `
-You are generating a "7-day Digestive Health Insight" card.
+You are generating a "Digestive Health Insight" card.
 Return ONLY valid JSON (no markdown, no extra text).
 
 Schema:
@@ -54,13 +54,11 @@ Schema:
   "language": "fr",
   "insight": "string (short)",
   "action": "string (short)",
-  "question": "string (very short)",
   "warnings": ["string", "string"],
-  "confidence": number (0.0 to 1.0)
 }
 
 Rules:
-- 1 insight, 1 action, 1 question.
+- 1 insight, 1 action
 - Include: "Ceci ne remplace pas un avis médical." in warnings.
 - If symptoms are severe/persistent: say consult a clinician (in French).
 - Keep everything concise.
