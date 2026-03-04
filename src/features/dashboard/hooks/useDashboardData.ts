@@ -273,6 +273,66 @@ export function useDashboardData() {
     }
   };
 
+    const exportPdf = async () => {
+      try {
+        if (!user?.profile) {
+          throw new Error("User profile not available");
+        }
+        
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+
+        const accessToken = data.session?.access_token;
+
+        if (!accessToken) {
+          throw new Error("No access token");
+        }
+        console.log("Supabase URL used:", import.meta.env.VITE_SUPABASE_URL);
+        console.log("Profile ID:", user.profile.id);
+
+        const from = "2026-02-01"; // temporary
+        const to = "2026-02-28";   // temporary
+
+        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-report-pdf`;
+
+        const res = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${accessToken}`,
+            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify({
+            profile_id: user.profile.id,
+            from,
+            to,
+            language: "fr",
+          }),
+        });
+
+        if (!res.ok) {
+          const txt = await res.text();
+          throw new Error(txt);
+        }
+
+        const blob = await res.blob();
+
+        const a = document.createElement("a");
+        const downloadUrl = URL.createObjectURL(blob);
+        a.href = downloadUrl;
+        a.download = `Sanozia_Report_${from}_to_${to}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(downloadUrl);
+
+      } catch (error) {
+        console.error("PDF export failed:", error);
+        throw error;
+      }
+    };
+
+
   return {
     consumptions,
     stools,
@@ -294,5 +354,6 @@ export function useDashboardData() {
     getTodayStats,
     refetch: loadData,
     exportData,
+    exportPdf,
   };
 }

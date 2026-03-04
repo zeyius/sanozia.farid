@@ -22,7 +22,7 @@ type AiTip = {
 export function DashboardPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { getTodayStats, loading, exportData } = useDashboardData();
+  const { getTodayStats, loading, exportData, exportPdf } = useDashboardData();
   const stats = getTodayStats();
   const [exporting, setExporting] = useState(false);
 
@@ -340,8 +340,10 @@ export function DashboardPage() {
           </button>
         </div>
 
-        {/* Export Button */}
-        <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-[#e3c79f]/30">
+       {/* Export Buttons */}
+        <div className="bg-white/90 backdrop-blur-sm rounded-xl p-4 shadow-lg border border-[#e3c79f]/30 space-y-3">
+          
+          {/* Excel Export */}
           <Button
             onClick={handleExport}
             disabled={exporting}
@@ -349,11 +351,23 @@ export function DashboardPage() {
             variant="secondary"
             icon={<Download size={20} />}
           >
-            {exporting ? 'Export en cours...' : 'Exporter pour le praticien'}
+            {exporting ? 'Export en cours...' : 'Exporter Excel (données brutes)'}
           </Button>
-          <p className="text-xs text-[#303d25]/70 mt-2 text-center">
-            Génère un fichier Excel avec toutes vos données de suivi
+
+          {/* PDF AI Export */}
+          <Button
+            onClick={exportPdf}
+            fullWidth
+            variant="primary"
+            icon={<Download size={20} />}
+          >
+            Exporter PDF (Résumé IA + Graphiques)
+          </Button>
+
+          <p className="text-xs text-[#303d25]/70 text-center">
+            Excel : données complètes • PDF : résumé clinique intelligent
           </p>
+
         </div>
 
         {/* Daily Tip */}
