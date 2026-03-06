@@ -273,64 +273,59 @@ export function useDashboardData() {
     }
   };
 
-    const exportPdf = async () => {
-      try {
-        if (!user?.profile) {
-          throw new Error("User profile not available");
-        }
-        
-        const { data, error } = await supabase.auth.getSession();
-        if (error) throw error;
+const exportPdf = async () => {
+  try {
+    if (!user?.profile) throw new Error("User profile not available");
 
-        const accessToken = data.session?.access_token;
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
 
-        if (!accessToken) {
-          throw new Error("No access token");
-        }
-        console.log("Supabase URL used:", import.meta.env.VITE_SUPABASE_URL);
-        console.log("Profile ID:", user.profile.id);
+    const accessToken = data.session?.access_token;
+    if (!accessToken) throw new Error("No access token");
 
-        const from = "2026-02-01"; // temporary
-        const to = "2026-02-28";   // temporary
+    const from = "2026-02-01";
+    const to = "2026-02-28";
 
-        const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-report-pdf`;
+    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-report-pdf`;
 
-        const res = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${accessToken}`,
-            "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
-          },
-          body: JSON.stringify({
-            profile_id: user.profile.id,
-            from,
-            to,
-            language: "fr",
-          }),
-        });
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        // ✅ both headers
+        "Authorization": `Bearer ${accessToken}`,
+        "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({
+        profile_id: user.profile.id,
+        from,
+        to,
+        language: "fr",
+      }),
+    });
 
-        if (!res.ok) {
-          const txt = await res.text();
-          throw new Error(txt);
-        }
+    // ✅ print server error body
+    if (!res.ok) {
+      const text = await res.text();
+      console.error("PDF export failed (status):", res.status);
+      console.error("PDF export failed (body):", text);
+      throw new Error(text);
+    }
 
-        const blob = await res.blob();
-
-        const a = document.createElement("a");
-        const downloadUrl = URL.createObjectURL(blob);
-        a.href = downloadUrl;
-        a.download = `Sanozia_Report_${from}_to_${to}.pdf`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(downloadUrl);
-
-      } catch (error) {
-        console.error("PDF export failed:", error);
-        throw error;
-      }
-    };
+    const blob = await res.blob();
+    const downloadUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = downloadUrl;
+    a.download = `Sanozia_Report_${from}_to_${to}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(downloadUrl);
+  } catch (e) {
+    console.error("PDF export failed:", e);
+    throw e;
+  }
+};
 
 
   return {

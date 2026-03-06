@@ -354,7 +354,7 @@ export function DashboardPage() {
             {exporting ? 'Export en cours...' : 'Exporter Excel (données brutes)'}
           </Button>
 
-          {/* PDF AI Export */}
+          
           <Button
             onClick={exportPdf}
             fullWidth
