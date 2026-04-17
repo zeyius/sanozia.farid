@@ -10,9 +10,7 @@ type Output = {
   language: "fr";
   insight: string;
   action: string;
-  question: string;
   warnings: string[];
-  confidence: number;
 };
 
 Deno.serve(async (req) => {
@@ -28,7 +26,9 @@ Deno.serve(async (req) => {
 
   try {
     const LLM_API_KEY = Deno.env.get("LLM_API_KEY");
-    const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "deepseek/deepseek-r1-0528:free";
+    const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "arcee-ai/trinity-large-preview:free";
+
+    console.log("LLM_MODEL:", LLM_MODEL);
 
     if (!LLM_API_KEY) {
       return new Response(JSON.stringify({ error: "Missing LLM_API_KEY" }), {
@@ -45,6 +45,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    // ── minimal validation ──────────────────────────────────────────────────
+    if (typeof snapshot !== "object" || Array.isArray(snapshot)) {
+      return new Response(JSON.stringify({ error: "Invalid snapshot format" }), {
+        status: 400,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
     const prompt = `
 You are generating a "Digestive Health Insight" card.
 Return ONLY valid JSON (no markdown, no extra text).
@@ -54,7 +62,7 @@ Schema:
   "language": "fr",
   "insight": "string (short)",
   "action": "string (short)",
-  "warnings": ["string", "string"],
+  "warnings": ["string", "string"]
 }
 
 Rules:
@@ -67,12 +75,12 @@ User 7-day snapshot:
 ${JSON.stringify(snapshot)}
 `.trim();
 
-    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // ── 🆕 Eurouter au lieu d'OpenRouter ────────────────────────────────────
+    const resp = await fetch("https://api.eurouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${LLM_API_KEY}`,
         "Content-Type": "application/json",
-        // Optional but recommended by OpenRouter
         "HTTP-Referer": "https://sanozia.app",
         "X-Title": "Sanozia",
       },
@@ -83,29 +91,67 @@ ${JSON.stringify(snapshot)}
       }),
     });
 
+    const raw = await resp.text();
     if (!resp.ok) {
-      const details = await resp.text();
-      return new Response(JSON.stringify({ error: "LLM call failed", details }), {
+      return new Response(JSON.stringify({
+        error: "LLM call failed",
+        model: LLM_MODEL,
+        openrouter_status: resp.status,
+        openrouter_raw: raw,
+      }), {
         status: 502,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
     }
 
-    const json = await resp.json();
-    const text = json?.choices?.[0]?.message?.content ?? "";
+    let json: any;
+    try {
+      json = JSON.parse(raw);
+    } catch {
+      return new Response(JSON.stringify({
+        error: "Top-level response is not JSON",
+        model: LLM_MODEL,
+        openrouter_raw: raw,
+      }), {
+        status: 502,
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
 
-    // ✅ Strip ```json ... ``` fences if the model adds them
+    const rawContent = json?.choices?.[0]?.message?.content ?? "";
+    const text = Array.isArray(rawContent)
+      ? rawContent.map((part: any) => (typeof part?.text === "string" ? part.text : "")).join("").trim()
+      : String(rawContent).trim();
+
+    console.log("Extracted content:", text);
+
     const cleaned = text
-      .trim()
       .replace(/^```(?:json)?\s*/i, "")
-      .replace(/```$/i, "")
+      .replace(/\s*```$/i, "")
       .trim();
 
-    let parsed: Output;
+    let parsed: Output | null = null;
+
     try {
       parsed = JSON.parse(cleaned);
     } catch {
-      return new Response(JSON.stringify({ error: "LLM returned non-JSON", raw: text }), {
+      // fallback: extract first JSON object if model added extra text
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {
+          parsed = null;
+        }
+      }
+    }
+
+    if (!parsed) {
+      return new Response(JSON.stringify({
+        error: "LLM returned non-JSON",
+        model: LLM_MODEL,
+        raw_content: text,
+      }), {
         status: 502,
         headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
       });
@@ -122,4 +168,3 @@ ${JSON.stringify(snapshot)}
     });
   }
 });
-

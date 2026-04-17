@@ -273,18 +273,15 @@ export function useDashboardData() {
     }
   };
 
-const exportPdf = async () => {
+const exportPdf = async (from: string, to: string) => {
   try {
     if (!user?.profile) throw new Error("User profile not available");
 
-    const { data, error } = await supabase.auth.getSession();
+    const { data, error } = await supabase!.auth.getSession();
     if (error) throw error;
 
     const accessToken = data.session?.access_token;
     if (!accessToken) throw new Error("No access token");
-
-    const from = "2026-02-01";
-    const to = "2026-02-28";
 
     const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-report-pdf`;
 
@@ -292,7 +289,6 @@ const exportPdf = async () => {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        // ✅ both headers
         "Authorization": `Bearer ${accessToken}`,
         "apikey": import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
@@ -301,10 +297,11 @@ const exportPdf = async () => {
         from,
         to,
         language: "fr",
+        
+      
       }),
     });
 
-    // ✅ print server error body
     if (!res.ok) {
       const text = await res.text();
       console.error("PDF export failed (status):", res.status);
