@@ -1,0 +1,47 @@
+[
+  {
+    "name": "pedro_stable",
+    "scenario": "stable_week",
+    "subject": "Pedro",
+    "profile_id": "58dc5376-c447-4220-bcfd-e168a626edc1",
+    "from": "2026-02-09",
+    "to": "2026-02-22",
+    "notes": "Biweekly window in late February — stable functional variability, low pain, no blood. Outside the typical fine-tuning ranges."
+  },
+  {
+    "name": "marc_flare",
+    "scenario": "flare",
+    "subject": "Marc",
+    "profile_id": "e539a6ef-206c-4c89-bbb1-6fada777c393",
+    "from": "2025-12-15",
+    "to": "2025-12-28",
+    "notes": "Biweekly window during Marc's heaviest flare period: 9 blood-positive days week 1, 6 the next, 50+ stools total."
+  },
+  {
+    "name": "leila_post_treatment",
+    "scenario": "post_treatment_improvement",
+    "subject": "Leila",
+    "profile_id": "781e794a-91e1-4080-bd57-1bf80f681ace",
+    "from": "2025-10-03",
+    "to": "2025-10-17",
+    "notes": "Window crossing the Probiotic treatment start (2025-10-10). Captures one week before, one week after."
+  },
+  {
+    "name": "omar_mixed",
+    "scenario": "mixed_ambiguous",
+    "subject": "Omar",
+    "profile_id": "72a4862b-6b8f-49f9-9640-f61f6977f270",
+    "from": "2026-01-12",
+    "to": "2026-01-25",
+    "notes": "Biweekly window with mixed signals: stools and consumptions logged but no feeling captures (Omar's known pattern of incomplete tracking)."
+  },
+  {
+    "name": "sara_quiet",
+    "scenario": "near_empty",
+    "subject": "Sara",
+    "profile_id": "b4fe446b-faad-4478-98c9-f16ac729b14a",
+    "from": "2025-12-01",
+    "to": "2025-12-14",
+    "notes": "Sara's quietest two-week period — only 1-2 stool entries total, tests model behaviour on near-empty input."
+  }
+]

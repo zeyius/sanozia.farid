@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+.env.local
+
+# Eval fixtures and results contain patient data — never commit
+scripts/fixtures/*.json
+!scripts/fixtures/personas.json
+scripts/eval-results-*.json
+scripts/.env

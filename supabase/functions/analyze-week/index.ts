@@ -1,4 +1,4 @@
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import "@supabase/functions-js/edge-runtime.d.ts";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -13,7 +13,17 @@ type Output = {
   warnings: string[];
 };
 
-Deno.serve(async (req) => {
+type LLMContentPart = { text?: string };
+
+type LLMResponse = {
+  choices?: Array<{
+    message?: {
+      content?: string | LLMContentPart[];
+    };
+  }>;
+};
+
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -75,14 +85,13 @@ User 7-day snapshot:
 ${JSON.stringify(snapshot)}
 `.trim();
 
-    // ── 🆕 Eurouter au lieu d'OpenRouter ────────────────────────────────────
-    const resp = await fetch("https://api.eurouter.ai/api/v1/chat/completions", {
+    const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${LLM_API_KEY}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://sanozia.app",
-        "X-Title": "Sanozia",
+        "X-OpenRouter-Title": "Sanozia",
       },
       body: JSON.stringify({
         model: LLM_MODEL,
@@ -104,9 +113,9 @@ ${JSON.stringify(snapshot)}
       });
     }
 
-    let json: any;
+    let json: LLMResponse;
     try {
-      json = JSON.parse(raw);
+      json = JSON.parse(raw) as LLMResponse;
     } catch {
       return new Response(JSON.stringify({
         error: "Top-level response is not JSON",
@@ -120,7 +129,7 @@ ${JSON.stringify(snapshot)}
 
     const rawContent = json?.choices?.[0]?.message?.content ?? "";
     const text = Array.isArray(rawContent)
-      ? rawContent.map((part: any) => (typeof part?.text === "string" ? part.text : "")).join("").trim()
+      ? rawContent.map((part) => (typeof part?.text === "string" ? part.text : "")).join("").trim()
       : String(rawContent).trim();
 
     console.log("Extracted content:", text);

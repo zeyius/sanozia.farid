@@ -1,7 +1,6 @@
-// <reference types="https://esm.sh/@supabase/functions-js@2.4.4/edge-runtime.d.ts" />
-import "jsr:@supabase/functions-js/edge-runtime.d.ts";
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { PDFDocument, StandardFonts, rgb } from "npm:pdf-lib@1.17.1"; 
+import "@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "@supabase/supabase-js";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +14,118 @@ type ReportReq = {
   from: string;
   to: string;
   language?: "fr";
+  debug?: boolean;
+};
+
+type SymptomEntry = {
+  name?: string;
+  intensity?: number;
+};
+
+type SymptomStats = {
+  count?: number;
+  avg_intensity?: number;
+  max_intensity?: number;
+};
+
+type StoolEntry = {
+  stool_date?: string;
+  date?: string;
+  stool_time?: string;
+  time?: string;
+  consistency?: number | string;
+  blood_level?: string;
+  blood?: string;
+  mucus_level?: string;
+  mucus?: string;
+  evacuation_effort?: string;
+  effort?: string;
+  duration_minutes?: number;
+  duration?: number;
+  pain_level?: number;
+  pain?: number;
+  urgence?: number;
+  urgency?: number;
+  notes?: string;
+  note?: string;
+};
+
+type ConsumptionEntry = {
+  date?: string;
+  consumption_date?: string;
+  time?: string;
+  consumption_time?: string;
+  consumption?: string;
+  name?: string;
+  prep_mode?: string;
+  preparation?: string;
+  after_effects?: string;
+};
+
+type FeelingEntry = {
+  date?: string;
+  feeling_date?: string;
+  time?: string;
+  feeling_time?: string;
+  global_feeling?: string;
+  mood?: string;
+  symptoms?: SymptomEntry[];
+  notes?: string;
+  note?: string;
+};
+
+type TreatmentEntry = {
+  date?: string;
+  taken_at?: string;
+  treatment_date?: string;
+  name?: string;
+  treatment?: string;
+  dose?: string;
+  dosage?: string;
+};
+
+type DailyEntry = {
+  stools?: {
+    count?: number;
+    pain_max?: number;
+    consistency_avg?: number;
+    blood_counts?: Record<string, number>;
+    mucus_counts?: Record<string, number>;
+    urgency_counts?: Record<string, number>;
+  };
+  feelings?: {
+    global_feeling_mode?: string;
+    notes_count?: number;
+    symptoms_by_name?: Record<string, SymptomStats>;
+  };
+  consumptions?: {
+    count?: number;
+    by_type?: Record<string, number>;
+  };
+};
+
+type Snapshot = {
+  daily?: DailyEntry[];
+  stools?: StoolEntry[];
+  consumptions?: ConsumptionEntry[];
+  feelings?: FeelingEntry[];
+  treatments?: TreatmentEntry[];
+  patient?: {
+    name?: string;
+    diagnosis?: string;
+    last_calprotectin?: unknown;
+    symptom_catalog?: unknown;
+    rectocolite_signature?: unknown;
+    [key: string]: unknown;
+  };
+  meta?: {
+    range?: { from?: string; to?: string };
+  };
+  signature_questionnaire?: {
+    calculated_signature?: unknown;
+    confidence_score?: unknown;
+    completed_at?: unknown;
+  };
 };
 
 type AiSummary = {
@@ -68,7 +179,7 @@ const TIMELINE_LEGEND = `
 
 // ─── 🆕 encodeurs par type d'événement ──────────────────────────────────────
 
-function encodeStoolEvent(s: any): string {
+function encodeStoolEvent(s: StoolEntry): string {
   const dt = safeText(s?.stool_date ?? s?.date);
   const time = safeText(s?.stool_time ?? s?.time ?? "").slice(0, 5);
   const datetime = time ? `${dt}T${time}` : dt;
@@ -83,7 +194,7 @@ function encodeStoolEvent(s: any): string {
   return `${datetime}|S|c${c}|b${b}|m${m}|e${e}|d${d}|p${p}|u${u}${note ? `|${note}` : ""}`;
 }
 
-function encodeConsumptionEvent(c: any): string {
+function encodeConsumptionEvent(c: ConsumptionEntry): string {
   const dt = safeText(c?.date ?? c?.consumption_date);
   const time = safeText(c?.time ?? c?.consumption_time ?? "").slice(0, 5);
   const datetime = time ? `${dt}T${time}` : dt;
@@ -93,13 +204,13 @@ function encodeConsumptionEvent(c: any): string {
   return `${datetime}|C|${food}${prep ? `|${prep}` : ""}${effects ? `|effets:${effects}` : ""}`;
 }
 
-function encodeFeelingEvent(f: any): string {
+function encodeFeelingEvent(f: FeelingEntry): string {
   const dt = safeText(f?.date ?? f?.feeling_date);
   const time = safeText(f?.time ?? f?.feeling_time ?? "").slice(0, 5);
   const datetime = time ? `${dt}T${time}` : dt;
   const mood = safeText(f?.global_feeling ?? f?.mood ?? "?");
-  const syms: any[] = Array.isArray(f?.symptoms) ? f.symptoms : [];
-  const symStr = syms.map((s: any) => {
+  const syms: SymptomEntry[] = Array.isArray(f?.symptoms) ? f.symptoms : [];
+  const symStr = syms.map((s: SymptomEntry) => {
     const name = safeText(s?.name ?? s);
     const intensity = Number(s?.intensity ?? 0) || 0;
     return intensity > 0 ? `${name}(${intensity})` : name;
@@ -108,7 +219,7 @@ function encodeFeelingEvent(f: any): string {
   return `${datetime}|F|${mood}${symStr ? `|${symStr}` : ""}${note ? `|${note}` : ""}`;
 }
 
-function encodeTreatmentEvent(t: any): string {
+function encodeTreatmentEvent(t: TreatmentEntry): string {
   const dt = safeText(t?.date ?? t?.taken_at ?? t?.treatment_date ?? "");
   const name = safeText(t?.name ?? t?.treatment ?? "?");
   const dose = safeText(t?.dose ?? t?.dosage ?? "");
@@ -117,11 +228,11 @@ function encodeTreatmentEvent(t: any): string {
 
 // ─── 🆕 buildDenseTimeline ───────────────────────────────────────────────────
 
-function buildDenseTimeline(snapshot: any): string {
+function buildDenseTimeline(snapshot: Snapshot): string {
   const events: { datetime: string; line: string }[] = [];
 
   // Selles brutes
-  const stools: any[] = Array.isArray(snapshot?.stools) ? snapshot.stools : [];
+  const stools: StoolEntry[] = Array.isArray(snapshot?.stools) ? snapshot.stools : [];
   for (const s of stools) {
     const dt = safeText(s?.stool_date ?? s?.date);
     const time = safeText(s?.stool_time ?? s?.time ?? "").slice(0, 5);
@@ -129,7 +240,7 @@ function buildDenseTimeline(snapshot: any): string {
   }
 
   // Consommations brutes
-  const consumptions: any[] = Array.isArray(snapshot?.consumptions) ? snapshot.consumptions : [];
+  const consumptions: ConsumptionEntry[] = Array.isArray(snapshot?.consumptions) ? snapshot.consumptions : [];
   for (const c of consumptions) {
     const dt = safeText(c?.date ?? c?.consumption_date);
     const time = safeText(c?.time ?? c?.consumption_time ?? "").slice(0, 5);
@@ -137,7 +248,7 @@ function buildDenseTimeline(snapshot: any): string {
   }
 
   // Feelings brutes
-  const feelings: any[] = Array.isArray(snapshot?.feelings) ? snapshot.feelings : [];
+  const feelings: FeelingEntry[] = Array.isArray(snapshot?.feelings) ? snapshot.feelings : [];
   for (const f of feelings) {
     const dt = safeText(f?.date ?? f?.feeling_date);
     const time = safeText(f?.time ?? f?.feeling_time ?? "").slice(0, 5);
@@ -145,7 +256,7 @@ function buildDenseTimeline(snapshot: any): string {
   }
 
   // Traitements
-  const treatments: any[] = Array.isArray(snapshot?.treatments) ? snapshot.treatments : [];
+  const treatments: TreatmentEntry[] = Array.isArray(snapshot?.treatments) ? snapshot.treatments : [];
   for (const t of treatments) {
     const dt = safeText(t?.date ?? t?.taken_at ?? t?.treatment_date ?? "");
     events.push({ datetime: `${dt}T00:00`, line: encodeTreatmentEvent(t) });
@@ -159,11 +270,11 @@ function buildDenseTimeline(snapshot: any): string {
 
 // ─── snapshot compaction ────────────────────────────────────────────────────
 
-function compactSnapshot(snapshot: any) {
-  const daily = Array.isArray(snapshot?.daily) ? snapshot.daily : [];
-  const stools: any[] = Array.isArray(snapshot?.stools) ? snapshot.stools : [];
-  const consumptions: any[] = Array.isArray(snapshot?.consumptions) ? snapshot.consumptions : [];
-  const feelings: any[] = Array.isArray(snapshot?.feelings) ? snapshot.feelings : [];
+function compactSnapshot(snapshot: Snapshot) {
+  const daily: DailyEntry[] = Array.isArray(snapshot?.daily) ? snapshot.daily : [];
+  const stools: StoolEntry[] = Array.isArray(snapshot?.stools) ? snapshot.stools : [];
+  const consumptions: ConsumptionEntry[] = Array.isArray(snapshot?.consumptions) ? snapshot.consumptions : [];
+  const feelings: FeelingEntry[] = Array.isArray(snapshot?.feelings) ? snapshot.feelings : [];
 
   // ─── agrégation globale (inchangée) ────────────────────────────────────────
   let stoolsTotal = 0;
@@ -225,8 +336,7 @@ function compactSnapshot(snapshot: any) {
 
     const sym = d?.feelings?.symptoms_by_name ?? {};
     if (sym && typeof sym === "object") {
-      for (const [name, statsAny] of Object.entries(sym)) {
-        const stats = statsAny as any;
+      for (const [name, stats] of Object.entries(sym)) {
         const c = Number(stats?.count ?? 0) || 0;
         const avg = Number(stats?.avg_intensity ?? 0) || 0;
         const mx = Number(stats?.max_intensity ?? 0) || 0;
@@ -306,7 +416,7 @@ function compactSnapshot(snapshot: any) {
     const w = weeklyMap[wk];
     const gf = safeText(f?.global_feeling);
     if (gf) w.feeling_counts[gf] = (w.feeling_counts[gf] ?? 0) + 1;
-    const syms: any[] = Array.isArray(f?.symptoms) ? f.symptoms : [];
+    const syms: SymptomEntry[] = Array.isArray(f?.symptoms) ? f.symptoms : [];
     for (const sym of syms) {
       const name = safeText(sym?.name);
       if (name) w.symptom_days[name] = (w.symptom_days[name] ?? 0) + 1;
@@ -397,7 +507,7 @@ function compactSnapshot(snapshot: any) {
 
 // ─── AI ─────────────────────────────────────────────────────────────────────
 
-function buildAiPrompt(compact: any) {
+function buildAiPrompt(compact: ReturnType<typeof compactSnapshot>) {
   // 🆕 on sépare la timeline du reste pour injecter la légende proprement
   const { timeline, ...compactWithoutTimeline } = compact;
 
@@ -445,263 +555,43 @@ ${timeline ?? "(aucune donnée)"}
 `.trim();
 }
 
-async function callLLM(prompt: string) {
+async function callLLM(prompt: string): Promise<AiSummary> {
   const LLM_API_KEY = Deno.env.get("LLM_API_KEY");
-  const OPENROUTER_API_KEY = Deno.env.get("OPENROUTER_API_KEY");
-  const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "mistralai/mistral-7b-instruct";
+  const LLM_MODEL = Deno.env.get("LLM_MODEL") ?? "meta-llama/llama-3.2-3b-instruct:free";
   if (!LLM_API_KEY) throw new Error("Missing LLM_API_KEY");
 
-  const providers = [
-    {
-      name: "Eurouter",
-      url: "https://api.eurouter.ai/api/v1/chat/completions",
-      key: LLM_API_KEY,
-      headers: {
-        "HTTP-Referer": "https://sanozia.app",
-        "X-Title": "Sanozia",
-      },
+  const resp = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${LLM_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://sanozia.app",
+      "X-OpenRouter-Title": "Sanozia",
     },
-    {
-      name: "OpenRouter",
-      url: "https://openrouter.ai/api/v1/chat/completions",
-      key: OPENROUTER_API_KEY ?? LLM_API_KEY,
-      headers: {
-        "HTTP-Referer": "https://sanozia.app",
-        "X-OpenRouter-Title": "Sanozia",
-      },
-    },
-  ];
-
-  let lastError: Error | null = null;
-
-  for (const provider of providers) {
-    try {
-      console.log(`Trying ${provider.name}...`);
-
-      const resp = await fetch(provider.url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${provider.key}`,
-          "Content-Type": "application/json",
-          ...provider.headers,
-        },
-        body: JSON.stringify({
-          model: LLM_MODEL,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.3,
-        }),
-      });
-
-      if (!resp.ok) {
-        const details = await resp.text();
-        throw new Error(`${provider.name} failed (${resp.status}): ${details}`);
-      }
-
-      const json = await resp.json();
-      const text = json?.choices?.[0]?.message?.content ?? "";
-      const cleaned = String(text).trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
-      const parsed = JSON.parse(cleaned) as AiSummary;
-      parsed.confidence = clamp01(Number(parsed.confidence ?? 0));
-
-      console.log(`Success via ${provider.name}`);
-      return parsed;
-
-    } catch (e) {
-      lastError = e as Error;
-      console.error(`${provider.name} error:`, lastError.message);
-    }
-  }
-
-  throw new Error(`All providers failed. Last error: ${lastError?.message}`);
-}
-
-// ─── Chart helpers ───────────────────────────────────────────────────────────
-
-function extractDailySeries(snapshot: any): {
-  dates: string[];
-  stoolCounts: number[];
-  bristolAvg: number[];
-  painMax: number[];
-  hasBlood: boolean[];
-} {
-  const stools: any[] = Array.isArray(snapshot?.stools) ? snapshot.stools : [];
-
-  // Agréger par date depuis les selles brutes
-  const byDate: Record<string, {
-    count: number;
-    bristolMax: number;
-    painMax: number;
-    hasBlood: boolean;
-  }> = {};
-
-  const BLOOD_POSITIVE = ["light", "moderate", "heavy", "traces", "importante"];
-
-  for (const s of stools) {
-    const date = safeText(s?.stool_date ?? s?.date);
-    if (!date) continue;
-
-    if (!byDate[date]) byDate[date] = { count: 0, bristolMax: 0, painMax: 0, hasBlood: false };
-
-    const entry = byDate[date];
-    entry.count += 1;
-
-    const bristol = Number(s?.consistency ?? 0) || 0;
-    if (bristol > entry.bristolMax) entry.bristolMax = bristol;
-
-    const pain = Number(s?.pain_level ?? s?.pain ?? 0) || 0;
-    if (pain > entry.painMax) entry.painMax = pain;
-
-    const bloodRaw = safeText(s?.blood_level ?? s?.blood).toLowerCase();
-    if (BLOOD_POSITIVE.includes(bloodRaw)) entry.hasBlood = true;
-  }
-
-  // Trier par date et aplatir
-  const dates = Object.keys(byDate).sort();
-  const stoolCounts = dates.map(d => byDate[d].count);
-  const bristolAvg  = dates.map(d => byDate[d].bristolMax);
-  const painMax     = dates.map(d => byDate[d].painMax);
-  const hasBlood    = dates.map(d => byDate[d].hasBlood);
-
-  return { dates, stoolCounts, bristolAvg, painMax, hasBlood };
-}
-
-function chartScaffold(opts: {
-  page: any; font: any; fontBold: any;
-  originX: number; originY: number; chartW: number; chartH: number;
-  title: string; yMax: number; yAxisColor: [number,number,number];
-  gridLines?: number;
-}): { plotX: number; plotY: number; plotW: number; plotH: number; slotW: (n:number)=>number } {
-  const { page, font, fontBold, originX, originY, chartW, chartH,
-          title, yMax, yAxisColor, gridLines = 5 } = opts;
-  const axisLeft = 32; const axisRight = 12; const axisBottom = 24; const titleH = 20;
-  const plotW = chartW - axisLeft - axisRight;
-  const plotH = chartH - axisBottom - titleH;
-  const plotX = originX + axisLeft;
-  const plotY = originY + axisBottom;
-  const [yr, yg, yb] = yAxisColor;
-
-  page.drawText(title, {
-    x: originX + axisLeft + plotW / 2 - title.length * 3.2,
-    y: originY + chartH - titleH + 5,
-    size: 10, font: fontBold, color: rgb(0.12, 0.12, 0.12),
+    body: JSON.stringify({
+      model: LLM_MODEL,
+      messages: [{ role: "user", content: prompt }],
+      temperature: 0.3,
+    }),
   });
 
-  for (let i = 0; i <= gridLines; i++) {
-    const gy = plotY + (plotH / gridLines) * i;
-    page.drawLine({ start: { x: plotX, y: gy }, end: { x: plotX + plotW, y: gy },
-      thickness: 0.3, color: rgb(0.86, 0.86, 0.86) });
-    const lbl = String(Math.round((yMax / gridLines) * i));
-    page.drawText(lbl, { x: plotX - lbl.length * 4 - 3, y: gy - 3,
-      size: 6, font, color: rgb(yr, yg, yb) });
+  if (!resp.ok) {
+    const details = await resp.text();
+    throw new Error(`Eurouter failed (${resp.status}): ${details}`);
   }
 
-  page.drawLine({ start: { x: plotX, y: plotY }, end: { x: plotX, y: plotY + plotH },
-    thickness: 0.9, color: rgb(yr, yg, yb) });
-  page.drawLine({ start: { x: plotX, y: plotY }, end: { x: plotX + plotW, y: plotY },
-    thickness: 0.9, color: rgb(0.25, 0.25, 0.25) });
+  const json = await resp.json();
+  const text = json?.choices?.[0]?.message?.content ?? "";
+  const cleaned = String(text).trim().replace(/^```(?:json)?\s*/i, "").replace(/```$/i, "").trim();
+  const parsed = JSON.parse(cleaned) as AiSummary;
+  parsed.confidence = clamp01(Number(parsed.confidence ?? 0));
 
-  return { plotX, plotY, plotW, plotH, slotW: (n: number) => plotW / n };
-}
-
-function drawSellesSangChart(opts: {
-  page: any; font: any; fontBold: any;
-  originX: number; originY: number; chartW: number; chartH: number;
-  bristolAvg: number[]; hasBlood: boolean[]; labels: string[];
-}) {
-  const { page, font, bristolAvg, hasBlood, labels } = opts;
-  const n = bristolAvg.length;
-  if (n === 0) return;
-
-  const yMax = 7;
-  const { plotX, plotY, plotW, plotH } = chartScaffold({
-    ...opts, title: "Consistance selles (Bristol) + Sang",
-    yMax, yAxisColor: [0.10, 0.38, 0.72], gridLines: 7,
-  });
-
-  const legX = plotX + plotW - 100;
-  const legY = opts.originY + opts.chartH - 14;
-  page.drawRectangle({ x: legX,     y: legY, width: 8, height: 8, color: rgb(0.09, 0.46, 0.82), opacity: 0.82 });
-  page.drawText("Consistance", { x: legX + 11, y: legY + 1, size: 6, font, color: rgb(0.2, 0.2, 0.2) });
-  page.drawRectangle({ x: legX + 62, y: legY, width: 8, height: 8, color: rgb(0.78, 0.08, 0.08) });
-  page.drawText("Sang", { x: legX + 73, y: legY + 1, size: 6, font, color: rgb(0.2, 0.2, 0.2) });
-
-  const slotW  = plotW / n;
-  const barPad = Math.max(0.5, slotW * 0.10);
-  const barW   = Math.max(2, slotW - barPad * 2);
-  const showEvery = n <= 10 ? 1 : n <= 20 ? 2 : n <= 31 ? 5 : 7;
-
-  for (let i = 0; i < n; i++) {
-    const bx  = plotX + i * slotW + barPad;
-    const val = Math.round(Number(bristolAvg[i]) || 0);
-    const barH = val > 0 ? (val / yMax) * plotH : 0;
-
-    if (barH > 0) {
-      page.drawRectangle({ x: bx, y: plotY, width: barW, height: barH,
-        color: rgb(0.09, 0.46, 0.82), opacity: 0.82 });
-    }
-
-    if (hasBlood[i] && barH > 0) {
-      const capH = Math.max(4, plotH * 0.04);
-      page.drawRectangle({ x: bx, y: plotY + barH, width: barW, height: capH,
-        color: rgb(0.78, 0.08, 0.08), opacity: 0.95 });
-    }
-
-    if (labels[i] && i % showEvery === 0) {
-      const lbl = labels[i].length > 5 ? labels[i].slice(5) : labels[i];
-      page.drawText(lbl, { x: bx, y: plotY - 15, size: 5, font, color: rgb(0.3, 0.3, 0.3) });
-    }
-  }
-}
-
-function drawDouleurChart(opts: {
-  page: any; font: any; fontBold: any;
-  originX: number; originY: number; chartW: number; chartH: number;
-  painMax: number[]; labels: string[];
-}) {
-  const { page, font, painMax, labels } = opts;
-  const n = painMax.length;
-  if (n === 0) return;
-
-  const yMax = 10;
-  const { plotX, plotY, plotW, plotH } = chartScaffold({
-    ...opts, title: "Douleur maximale par jour (0-10)",
-    yMax, yAxisColor: [0.80, 0.32, 0.04],
-  });
-
-  const legX = plotX + plotW - 80;
-  const legY = opts.originY + opts.chartH - 16;
-  page.drawRectangle({ x: legX, y: legY, width: 10, height: 8, color: rgb(0.87, 0.38, 0.06) });
-  page.drawText("Douleur", { x: legX + 13, y: legY + 1, size: 6, font, color: rgb(0.80, 0.32, 0.04) });
-
-  const slotW  = plotW / n;
-  const showEvery = n <= 10 ? 1 : n <= 20 ? 2 : n <= 31 ? 5 : 7;
-  const toY = (v: number) => plotY + (v / yMax) * plotH;
-
-  for (let i = 0; i < n; i++) {
-    const cx = plotX + i * slotW + slotW / 2;
-    const cy = toY(painMax[i]);
-    const dotR = 2.5;
-
-    page.drawRectangle({ x: cx - dotR, y: cy - dotR, width: dotR * 2, height: dotR * 2,
-      color: rgb(0.87, 0.38, 0.06), opacity: 0.97 });
-
-    if (i < n - 1) {
-      const nx = plotX + (i + 1) * slotW + slotW / 2;
-      const ny = toY(painMax[i + 1]);
-      page.drawLine({ start: { x: cx, y: cy }, end: { x: nx, y: ny },
-        thickness: 1.5, color: rgb(0.87, 0.38, 0.06), opacity: 0.85 });
-    }
-
-    if (labels[i] && i % showEvery === 0) {
-      const lbl = labels[i].length > 5 ? labels[i].slice(5) : labels[i];
-      page.drawText(lbl, { x: cx - 4, y: plotY - 15, size: 5, font, color: rgb(0.3, 0.3, 0.3) });
-    }
-  }
+  return parsed;
 }
 
 // ─── PDF builder ─────────────────────────────────────────────────────────────
 
-async function buildPdf(snapshot: any, ai: AiSummary) {
+async function buildPdf(snapshot: Snapshot, ai: AiSummary) {
   const pdf = await PDFDocument.create();
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const fontBold = await pdf.embedFont(StandardFonts.HelveticaBold);
@@ -786,44 +676,6 @@ async function buildPdf(snapshot: any, ai: AiSummary) {
     dy -= 11;
   }
 
-  /*
-  const page2 = pdf.addPage([A4W, A4H]);
-
-  page2.drawRectangle({ x: 0, y: A4H - 44, width: A4W, height: 44, color: rgb(0.09, 0.46, 0.82) });
-  page2.drawText("Graphiques de suivi", {
-    x: 40, y: A4H - 28, size: 15, font: fontBold, color: rgb(1, 1, 1),
-  });
-  page2.drawText(`${rangeFrom} - ${rangeTo}`, {
-    x: A4W - 180, y: A4H - 28, size: 10, font, color: rgb(0.85, 0.92, 1),
-  });
-
-  const { dates, stoolCounts, bristolAvg, painMax, hasBlood } = extractDailySeries(snapshot);
-
-  const chartMarginX = 36;
-  const chartW = A4W - chartMarginX * 2;
-  const chartH = 320;
-  const chartGap = 48;
-
-  const chart1Y = A4H - 44 - chartH - 48;
-  drawSellesSangChart({
-    page: page2, font, fontBold,
-    originX: chartMarginX, originY: chart1Y,
-    chartW, chartH,
-    bristolAvg, hasBlood, labels: dates,
-  });
-
-  const chart2Y = chart1Y - chartH - chartGap;
-  drawDouleurChart({
-    page: page2, font, fontBold,
-    originX: chartMarginX, originY: chart2Y,
-    chartW, chartH,
-    painMax, labels: dates,
-  });
-
-  page2.drawText("Ceci ne remplace pas un avis médical. Généré par Sanozia.", {
-    x: 40, y: 24, size: 7, font, color: rgb(0.5, 0.5, 0.5),
-  });*/
-
   return await pdf.save();
 
 }
@@ -876,8 +728,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    if ((body as any).debug === true) {
-      const { dates, stoolCounts, bristolAvg, painMax, hasBlood } = extractDailySeries(snapshot);
+    if (body.debug === true) {
       const compact = compactSnapshot(snapshot);
       return new Response(
         JSON.stringify({
@@ -887,13 +738,6 @@ Deno.serve(async (req) => {
           first_daily_entry: snapshot?.daily?.[0] ?? null,
           timeline_preview: compact.timeline?.split("\n").slice(0, 10).join("\n"),
           timeline_total_lines: compact.timeline?.split("\n").length ?? 0,
-          extracted_series_first5: {
-            dates: dates.slice(0, 5),
-            stoolCounts: stoolCounts.slice(0, 5),
-            bristolAvg: bristolAvg.slice(0, 5),
-            painMax: painMax.slice(0, 5),
-            hasBlood: hasBlood.slice(0, 5),
-          },
         }, null, 2),
         { status: 200, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
       );
@@ -904,7 +748,7 @@ Deno.serve(async (req) => {
     const ai = await callLLM(prompt);
     const pdfBytes = await buildPdf(snapshot, ai);
 
-    return new Response(pdfBytes, {
+    return new Response(pdfBytes.buffer as ArrayBuffer, {
       status: 200,
       headers: {
         ...CORS_HEADERS,
@@ -913,11 +757,11 @@ Deno.serve(async (req) => {
       },
     });
   } catch (e) {
-    const err = e as any;
+    const err = e instanceof Error ? e : new Error(String(e));
     return new Response(
       JSON.stringify({
         error: "Unexpected error",
-        details: String(err?.message ?? err),
+        details: err.message,
       }),
       { status: 500, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } },
     );
